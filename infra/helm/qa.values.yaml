@@ -1,0 +1,30 @@
+# Declare variables to be passed into your templates.
+
+# Release-wide Values
+# Service Specific Values
+namespace: qa-email-ns
+app: qa-email
+deployment:
+  name: qa-email-deployment
+  replicas: 1
+  nodegroup: qa
+  containers:
+    name: qa-email-container
+    image: 834772772058.dkr.ecr.us-east-1.amazonaws.com/email
+    version: ''
+    port: 3000
+    cpu: 100m
+    memory: 400Mi
+service:
+  name: qa-email-svc
+ingress:
+  name: qa-email-ingress
+  arn: arn:aws:acm:us-east-1:834772772058:certificate/edbe1d0b-4166-4448-a035-94d60d8b7ffb
+  nodegroup: qa
+  host: email.api.torum.team
+  service: qa-email-svc
+hpa:
+  name: qa-email-hpa
+  maxReplicas: 1
+  minReplicas: 1
+  CPUUtilization: 70

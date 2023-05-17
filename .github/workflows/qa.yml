@@ -26,7 +26,6 @@ jobs:
           echo "$SSH_KEY_GITMODULES" > $HOME/.ssh/id_rsa
           chmod 400 $HOME/.ssh/id_rsa   
           cat $HOME/.ssh/id_rsa
-
       - name: submodule init
         run: git submodule init
       - name: update --init
@@ -40,40 +39,35 @@ jobs:
       - run: cp package.json build
       - run: cp package-lock.json build
       - run: cp .env build
-      - run: cp Dockerfile build
 
       - name: upload image to ECR
         uses: mr-smithers-excellent/docker-build-push@v5
         with:
+          dockerfile: /home/runner/work/email-service/email-service/infra/docker/Dockerfile
           image: email
           tags: ${{ github.sha }}
           registry: 834772772058.dkr.ecr.us-east-1.amazonaws.com
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.QA_AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.QA_AWS_SECRET_ACCESS_KEY }}
+          
 
-
-      - name: Deploy to Kubernetes cluster
-        uses: kodermax/kubectl-aws-eks@master
+      - name: Create kube config
+        run: |
+          mkdir -p $HOME/.kube/
+          echo "${{ secrets.KUBE_CONFIG }}" > $HOME/.kube/config
+          chmod 600 $HOME/.kube/config
+          cat $HOME/.kube/config
+      - name: Install helm
+        run: |
+          curl -LO <https://get.helm.sh/helm-v3.8.0-linux-amd64.tar.gz>
+          tar -zxvf helm-v3.8.0-linux-amd64.tar.gz
+          mv linux-amd64/helm /usr/local/bin/helm
+          helm version
+      #- name: Lint helm charts
+        #run: helm lint /home/runner/work/email-service/email-service/infra/helm/
+      - name: Deploy Helm
+        run: helm upgrade --install --atomic --timeout 5m qa-email-chart /home/runner/work/email-service/email-service/infra/helm/ -f /home/runner/work/email-service/email-service/infra/helm/qa.values.yaml --namespace qa-email-ns --create-namespace --set deployment.containers.version=${{ github.sha }}
         env:
-          RELEASE_IMAGE: 834772772058.dkr.ecr.us-east-1.amazonaws.com/email:${{ github.sha }}
-          KUBE_CONFIG_DATA: ${{ secrets.QA_KUBE_CONFIG_DATA }}
           AWS_ACCESS_KEY_ID: ${{ secrets.QA_AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.QA_AWS_SECRET_ACCESS_KEY }}
-          KUBECTL_VERSION: "v1.22.0"
-          IAM_VERSION: "0.5.4"
-          KUBE_NAMESPACE: qa-email-ns
-        with:
-          args: set image deployment/qa-email-deployment qa-email-container=${{ env.RELEASE_IMAGE }} --record -n $KUBE_NAMESPACE
-
-      - name: verify deployment
-        uses: kodermax/kubectl-aws-eks@master
-        env:
-          KUBE_CONFIG_DATA: ${{ secrets.QA_KUBE_CONFIG_DATA }}
-          AWS_ACCESS_KEY_ID: ${{ secrets.QA_AWS_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.QA_AWS_SECRET_ACCESS_KEY }}
-          KUBECTL_VERSION: "v1.22.0"
-          IAM_VERSION: "0.5.4"
-          KUBE_NAMESPACE: qa-email-ns
-        with:
-          args: rollout status deployment/qa-email-deployment -n $KUBE_NAMESPACE
